@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>자금흐름 & 투자 & 가계부 마스터 대시보드</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --bg: #1a1c23; --card: #252836; --primary: #38bdf8; --secondary: #818cf8; --income: #10b981; --expense: #f43f5e; --invest: #facc15; --loan: #fb923c; --text: #f8fafc; }
+        body { font-family: 'Pretendard', sans-serif; background: var(--bg); color: var(--text); padding: 40px 20px; line-height: 1.6; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn-group button { background: var(--card); color: #ccc; border: 1px solid #444; padding: 8px 15px; cursor: pointer; border-radius: 8px; margin-left: 5px; transition: 0.2s; }
+        .btn-group button:hover { background: #333; }
+
+        .target-card { background: linear-gradient(135deg, #1e293b, #0f172a); padding: 25px; border-radius: 20px; margin-bottom: 30px; border: 1px solid #334155; position: relative; overflow: hidden; }
+        .target-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .target-header input[type="text"] { font-size: 18px; font-weight: bold; color: var(--primary); background: transparent; border: none; width: 150px; border-bottom: 1px dashed #475569; padding: 0; }
+        .target-header input[type="number"] { font-size: 20px; font-weight: bold; background: #0f172a; border: 1px solid #334155; color: white; padding: 5px 10px; border-radius: 8px; width: 150px; text-align: right; }
+        .progress-container { width: 100%; background: #0f172a; border-radius: 12px; height: 24px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); overflow: hidden; position: relative; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 1s ease-in-out; box-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+        .progress-text { position: absolute; right: 10px; top: 2px; font-size: 13px; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+
+        .date-card { background: linear-gradient(to right, #1e293b, var(--card)); padding: 20px 25px; border-radius: 16px; margin-bottom: 30px; border-left: 4px solid var(--primary); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+        .date-group { display: flex; flex-direction: column; flex: 1; min-width: 200px; }
+        .date-group label { font-size: 13px; color: #94a3b8; margin-bottom: 5px; }
+        .date-input { background: #0f172a; border: 1px solid #334155; color: white; padding: 10px 15px; border-radius: 8px; font-size: 15px; cursor: pointer; }
+        .date-result { font-size: 18px; font-weight: bold; color: var(--primary); text-align: right; min-width: 150px; }
+
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .summary-card { background: var(--card); padding: 20px; border-radius: 16px; border-bottom: 4px solid var(--primary); }
+        .summary-card h3 { font-size: 13px; color: #94a3b8; margin: 0 0 10px 0; }
+        .summary-card .value { font-size: 20px; font-weight: bold; }
+
+        .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
+        @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+        
+        .card { background: var(--card); padding: 25px; border-radius: 20px; }
+        .card h2 { font-size: 17px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+        
+        .row { display: grid; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .col-inc-exp { grid-template-columns: 2fr 1.5fr 35px; }
+        .col-loan { grid-template-columns: 1.5fr 1fr 1fr 1fr 35px; }
+        .col-event { grid-template-columns: 1.5fr 1fr 1.5fr 35px; }
+        .col-invest { grid-template-columns: 1.5fr 1.2fr 1.2fr 35px; }
+        
+        .list-header { display: grid; gap: 10px; margin-bottom: 8px; font-size: 11px; color: #64748b; padding-right: 45px; }
+        .list-header div { text-align: center; }
+        .list-header .txt-left { text-align: left; padding-left: 5px; }
+
+        input, select { width: 100%; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 8px; font-size: 13px; box-sizing: border-box; }
+        input[type="number"] { text-align: right; }
+        
+        .input-suffix-group { display: flex; width: 100%; align-items: center; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding-right: 10px; box-sizing: border-box; }
+        .input-suffix-group input { border: none; flex: 1; background: transparent; padding: 10px; margin: 0; }
+        .input-suffix-group input:focus { outline: none; }
+        .input-suffix-group span { color: #64748b; font-size: 12px; font-weight: bold; }
+
+        .btn-add { background: var(--primary); color: #0f172a; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; line-height: 1; font-weight: bold; }
+        .btn-del { background: #334155; color: #cbd5e1; border: none; cursor: pointer; font-size: 12px; padding: 8px 0; border-radius: 6px; width: 100%; }
+        .btn-del:hover { background: var(--expense); color: white; }
+
+        .total-year { grid-column: 1 / -1; background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid var(--primary); color: white; padding: 25px; border-radius: 20px; display: flex; justify-content: space-between; align-items: flex-start; text-align: center; flex-wrap: wrap; gap: 10px; }
+        .total-box { flex: 1; min-width: 150px; background: rgba(0,0,0,0.3); padding: 20px 10px; border-radius: 12px; border: 1px solid #334155; }
+        .total-box h4 { margin: 0 0 10px 0; color: #cbd5e1; font-weight: normal; font-size: 14px; }
+        .total-box span { font-size: 24px; font-weight: 900; display: block; margin-bottom: 8px; }
+        .explain-text { font-size: 11px; color: #64748b; line-height: 1.4; word-break: keep-all; }
+        .grand-total { color: var(--invest); text-shadow: 0 0 10px rgba(250, 204, 21, 0.2); font-size: 28px !important; }
+        .operator { font-size: 24px; color: #475569; align-self: center; padding-top: 30px; }
+        
+        /* 가계부 캘린더 */
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .calendar-header h2 { margin: 0; font-size: 20px; color: var(--primary); }
+        .cal-nav { background: #334155; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; }
+        .cal-nav:hover { background: #475569; }
+        
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+        .cal-day-name { text-align: center; font-size: 12px; color: #94a3b8; padding: 10px 0; font-weight: bold; }
+        .cal-cell { background: #0f172a; border: 1px solid #334155; border-radius: 10px; min-height: 95px; padding: 8px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; }
+        .cal-cell:hover { border-color: var(--primary); background: #1e293b; }
+        .cal-date { font-size: 13px; font-weight: bold; color: #cbd5e1; margin-bottom: 5px; }
+        .cal-today { border: 1px solid var(--primary); background: rgba(56, 189, 248, 0.05); }
+        .cal-other-month { opacity: 0.3; pointer-events: none; }
+        
+        .cal-amt { font-size: 11px; text-align: right; margin-top: 2px; font-weight: 600; }
+        .cal-net { font-size: 12px; text-align: right; margin-top: auto; padding-top: 4px; border-top: 1px dashed #334155; font-weight: bold; }
+        .c-inc { color: var(--primary); } 
+        .c-exp { color: var(--expense); }
+
+        /* 실질 현금흐름 및 인건비 분석 */
+        .trend-container { margin-top: 30px; padding: 25px; background: var(--card); border-radius: 20px; border: 1px solid #334155; }
+        .trend-container h2 { font-size: 18px; color: white; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+        .trend-item { display: flex; align-items: center; padding: 15px 0; border-bottom: 1px dashed #334155; flex-wrap: wrap; gap: 15px; }
+        .trend-item:last-child { border-bottom: none; }
+        .trend-month { font-size: 15px; font-weight: bold; color: #cbd5e1; width: 90px; }
+        .trend-bars { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 8px; }
+        .trend-bar-row { display: flex; align-items: center; gap: 10px; }
+        .trend-label { width: 30px; font-size: 11px; color: #94a3b8; }
+        .trend-bar-track { flex: 1; background: #0f172a; height: 8px; border-radius: 4px; overflow: hidden; }
+        .trend-bar { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .fill-inc { background: var(--primary); }
+        .fill-exp { background: var(--expense); }
+        .trend-val { width: 85px; text-align: right; font-size: 12px; color: #cbd5e1; }
+        .trend-net-box { width: 110px; text-align: right; }
+        .trend-net-box .label { font-size: 11px; color: #94a3b8; margin-bottom: 3px; }
+        .trend-net-box .val { font-size: 16px; font-weight: bold; }
+
+        /* 모달 스타일 */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 100; backdrop-filter: blur(5px); }
+        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; width: 90%; max-width: 450px; border: 1px solid #444; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { margin: 0; font-size: 18px; color: white; }
+        .close-btn { background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; }
+        
+        .modal-summary { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 15px; margin-bottom: 20px; text-align: center; }
+        .modal-summary .flex-row { display: flex; justify-content: space-around; font-size: 13px; margin-bottom: 8px; }
+        .modal-summary .total-net { font-size: 18px; font-weight: bold; border-top: 1px solid #334155; padding-top: 8px; }
+
+        .ledger-form { display: grid; gap: 8px; margin-bottom: 20px; }
+        .form-row { display: flex; gap: 8px; }
+        .form-row select, .form-row input { flex: 1; }
+        .form-row.memo-row input { flex: 2; }
+        .btn-submit { background: var(--primary); color: #0f172a; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 5px; }
+        
+        .ledger-list { max-height: 200px; overflow-y: auto; }
+        .ledger-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #0f172a; margin-bottom: 8px; border-radius: 8px; border-left: 3px solid transparent; font-size: 13px; }
+        .ledger-item.type-inc { border-left-color: var(--primary); }
+        .ledger-item.type-exp { border-left-color: var(--expense); }
+        .ledger-item-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .tag-badge { display: inline-block; background: #334155; color: #cbd5e1; font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid #475569; width: max-content;}
+        .ledger-item-memo { color: #94a3b8; font-size: 12px; }
+
+        /* 기간 삭제 모달용 폼 구조 */
+        .del-form { display: flex; flex-direction: column; gap: 15px; }
+        .del-form label { font-size: 13px; color: #cbd5e1; margin-bottom: 0; }
+        .del-btn { background: var(--expense); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Finance & Invest Plan</h1>
+        <div class="btn-group">
+            <button onclick="exportData()">내보내기</button>
+            <button onclick="document.getElementById('fileInput').click()">불러오기</button>
+            <input type="file" id="fileInput" accept=".json" style="display:none" onchange="importData(event)">
+        </div>
+    </div>
+
+    <div class="target-card">
+        <div class="target-header">
+            <input type="text" id="targetName" value="1차 목표 자산" onchange="calc()">
+            <input type="number" id="targetAmount" value="10000" oninput="calc()"> <span style="font-weight:bold; color:#cbd5e1;">만원</span>
+        </div>
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+            <div class="progress-text"><span id="progressPercent">0</span>% 달성</div>
+        </div>
+    </div>
+
+    <div class="date-card">
+        <div class="date-group"><label>시작일 (현재)</label><input type="date" id="startDate" class="date-input" onchange="calc()"></div>
+        <div class="date-group"><label>목표일 (결과 확인)</label><input type="date" id="targetDate" class="date-input" onchange="calc()"></div>
+        <div class="date-result">총 <span id="diff-months" style="font-size: 28px; color: white;">0</span> 개월 플랜</div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-card" style="border-color: var(--income)"><h3>월 총 수입</h3><div class="value" id="top-inc">0</div></div>
+        <div class="summary-card" style="border-color: var(--expense)"><h3>월 총 지출</h3><div class="value" id="top-exp">0</div></div>
+        <div class="summary-card" style="border-color: var(--loan)"><h3>월 마통 상환액(원금+이자)</h3><div class="value" id="top-loan-total" style="color: var(--loan)">0</div></div>
+        <div class="summary-card" style="border-color: var(--primary)"><h3>월 순수 잉여금(저축)</h3><div class="value" id="top-save">0</div></div>
+        <div class="summary-card" style="border-color: var(--invest)"><h3>현재 총 투자금</h3><div class="value" id="top-invest">0</div></div>
+    </div>
+
+    <div class="main-grid">
+        <div class="card">
+            <h2>정기 수입 <button class="btn-add" onclick="addRow('income')">+</button></h2>
+            <div class="list-header col-inc-exp"><div class="txt-left">수입 항목명</div><div>월 금액(만)</div></div>
+            <div id="list-income"></div>
+            
+            <h2 style="margin-top:40px">정기 지출 <button class="btn-add" onclick="addRow('expense')">+</button></h2>
+            <div class="list-header col-inc-exp"><div class="txt-left">지출 항목명</div><div>월 금액(만)</div></div>
+            <div id="list-expense"></div>
+
+            <h2 style="margin-top:40px">마이너스 통장 (대출) <button class="btn-add" onclick="addRow('loan')">+</button></h2>
+            <div class="list-header col-loan"><div class="txt-left">대출명</div><div>총 원금</div><div>월상환액</div><div>연이율</div></div>
+            <div id="list-loan"></div>
+        </div>
+
+        <div class="card">
+            <h2>연간 빅 이벤트 <button class="btn-add" onclick="addRow('event')">+</button></h2>
+            <div class="list-header col-event"><div class="txt-left">이벤트명</div><div>발생 월</div><div>예상 금액(만)</div></div>
+            <div id="list-event"></div>
+
+            <h2 style="margin-top:40px">현재 투자 자산 <button class="btn-add" onclick="addRow('invest')">+</button></h2>
+            <div class="list-header col-invest"><div class="txt-left">투자 자산명</div><div>현재 원금(만)</div><div>월 수익률</div></div>
+            <div id="list-invest"></div>
+        </div>
+
+        <div class="total-year">
+            <div class="total-box">
+                <h4><span class="duration-text">0개월</span> 뒤 모인 현금</h4>
+                <span id="final-cash">0 만원</span>
+                <div class="explain-text" id="explain-cash"></div>
+            </div>
+            <div class="operator">+</div>
+            <div class="total-box">
+                <h4>투자 수익 (원금 포함)</h4>
+                <span id="final-profit" style="color: var(--primary);">0 만원</span>
+                <div class="explain-text" id="explain-profit"></div>
+            </div>
+            <div class="operator">-</div>
+            <div class="total-box" style="border: 1px solid var(--loan);">
+                <h4>남은 빚 (마통 잔액)</h4>
+                <span id="final-loan" style="color: var(--loan);">0 만원</span>
+                <div class="explain-text" id="explain-loan"></div>
+            </div>
+            <div class="operator">=</div>
+            <div class="total-box" style="border: 1px solid var(--primary); background: rgba(56, 189, 248, 0.05);">
+                <h4>최종 총 순자산</h4>
+                <span id="final-grand" class="grand-total">0 만원</span>
+                <div class="explain-text" id="explain-grand"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 10px;">
+        <div class="calendar-header">
+            <h2 id="cal-month-title">2026년 가계부</h2>
+            <div style="display: flex; gap: 8px;">
+                <button class="cal-nav" onclick="changeMonth(-1)">◀ 이전달</button>
+                <button class="cal-nav" onclick="changeMonth(1)">다음달 ▶</button>
+                <button class="cal-nav" style="background-color: var(--expense); font-weight: bold; margin-left: 10px;" onclick="openDeleteModal()">🗑️ 내역 삭제</button>
+                <button class="cal-nav" style="background-color: var(--income); font-weight: bold; margin-left: 5px;" onclick="document.getElementById('excelInput').click()">📥 엑셀 연동</button>
+                <input type="file" id="excelInput" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" style="display:none" onchange="importExcel(event)">
+            </div>
+        </div>
+        
+        <div class="calendar-grid" id="cal-days">
+            <div class="cal-day-name" style="color:var(--expense)">일</div>
+            <div class="cal-day-name">월</div><div class="cal-day-name">화</div><div class="cal-day-name">수</div>
+            <div class="cal-day-name">목</div><div class="cal-day-name">금</div>
+            <div class="cal-day-name" style="color:var(--primary)">토</div>
+        </div>
+    </div>
+
+    <div class="trend-container" style="background: linear-gradient(135deg, rgba(244, 63, 94, 0.1), rgba(15, 23, 42, 1)); border-color: var(--expense);">
+        <h2>🧑‍💻 실 가계부 기반 인건비 진단</h2>
+        <div id="labor-analysis-result" style="text-align: center; padding: 20px 0;">
+            <span style="color:#64748b;">엑셀 데이터를 연동하면 인건비 비중을 자동 분석해 드립니다.</span>
+        </div>
+    </div>
+
+    <div class="trend-container">
+        <h2>📊 월별 실질 현금흐름 요약 (가계부 기준)</h2>
+        <div id="ledger-trend-list"></div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="ledgerModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-date-title">기록</h3>
+            <button class="close-btn" onclick="closeModal()">✕</button>
+        </div>
+        
+        <div class="modal-summary" id="modal-summary-box">
+            <div class="flex-row">
+                <span class="c-inc">수입: 0원</span>
+                <span class="c-exp">지출: 0원</span>
+            </div>
+            <div class="total-net">총합: 0원</div>
+        </div>
+        
+        <div class="ledger-form">
+            <div class="form-row">
+                <select id="l-type" onchange="updateCategoryOptions()">
+                    <option value="exp">지출</option>
+                    <option value="inc">수입</option>
+                </select>
+                <input type="number" id="l-amt" placeholder="금액 (원)">
+            </div>
+            <div class="form-row memo-row">
+                <select id="l-category">
+                    <option value="식비/카페">식비/카페</option>
+                    <option value="교통/차량">교통/차량</option>
+                    <option value="인건비">인건비</option>
+                    <option value="하찮은일기장 운영비">하찮은일기장 운영비</option>
+                    <option value="오프라인 행사비">오프라인 행사비</option>
+                    <option value="기타">기타</option>
+                </select>
+                <input type="text" id="l-memo" placeholder="상세 내용">
+            </div>
+            <button class="btn-submit" onclick="addLedger()">+ 내역 저장하기</button>
+        </div>
+        <div class="ledger-list" id="modal-ledger-list"></div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🗑️ 가계부 내역 일괄 삭제</h3>
+            <button class="close-btn" onclick="closeDeleteModal()">✕</button>
+        </div>
+        
+        <div class="del-form">
+            <p style="font-size:13px; color:#94a3b8; margin-top:0;">특정 날짜나 기간을 선택하여 기록된 가계부 내역을 삭제합니다.</p>
+            
+            <div>
+                <label>삭제 시작일</label>
+                <input type="date" id="delStartDate">
+            </div>
+            
+            <div>
+                <label>삭제 종료일</label>
+                <input type="date" id="delEndDate">
+            </div>
+            
+            <button class="del-btn" onclick="executeDelete()">해당 기간 데이터 삭제</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let store = {
+        income: [{n: '도시가스 월급', v: 400}],
+        expense: [{n: '생활비', v: 150}],
+        loan: [{n: '마통', v: 3000, p: 50, r: 5}], 
+        event: [{n: '엄마 생신', v: 50, m: 5}],
+        invest: [{n: '이더리움', v: 1000, r: 5}],
+        ledger: {}
+    };
+
+    let currentCalDate = new Date();
+    let selectedDateStr = '';
+
+    function init() {
+        const today = new Date();
+        const nextYear = new Date(); nextYear.setFullYear(today.getFullYear() + 1);
+        
+        document.getElementById('startDate').value = localStorage.getItem('planStartDate') || today.toISOString().split('T')[0];
+        document.getElementById('targetDate').value = localStorage.getItem('planTargetDate') || nextYear.toISOString().split('T')[0];
+        document.getElementById('targetName').value = localStorage.getItem('planTargetName') || '1차 목표 자산';
+        document.getElementById('targetAmount').value = localStorage.getItem('planTargetAmount') || 10000;
+
+        const saved = localStorage.getItem('financeProDataMasterXLSX2');
+        if(saved) {
+            store = { ...store, ...JSON.parse(saved) };
+            if(!store.ledger) store.ledger = {};
+        }
+        render(); 
+        renderCalendar();
+        renderTrend(); 
+        renderLaborAnalysis(); // 초기화 시 인건비 분석도 같이 렌더링
+    }
+
+    function render() {
+        ['income', 'expense'].forEach(type => {
+            const container = document.getElementById(`list-${type}`); container.innerHTML = '';
+            store[type].forEach((item, idx) => {
+                container.innerHTML += `<div class="row col-inc-exp">
+                    <input type="text" value="${item.n}" onchange="update('${type}', ${idx}, 'n', this.value)">
+                    <input type="number" value="${item.v}" oninput="update('${type}', ${idx}, 'v', this.value)">
+                    <button class="btn-del" onclick="delRow('${type}', ${idx})">✕</button></div>`;
+            });
+        });
+
+        const loanContainer = document.getElementById('list-loan'); loanContainer.innerHTML = '';
+        store.loan.forEach((item, idx) => {
+            loanContainer.innerHTML += `<div class="row col-loan">
+                <input type="text" value="${item.n}" onchange="update('loan', ${idx}, 'n', this.value)">
+                <input type="number" value="${item.v}" oninput="update('loan', ${idx}, 'v', this.value)">
+                <input type="number" value="${item.p}" oninput="update('loan', ${idx}, 'p', this.value)">
+                <div class="input-suffix-group"><input type="number" value="${item.r}" step="0.1" oninput="update('loan', ${idx}, 'r', this.value)"><span>%</span></div>
+                <button class="btn-del" onclick="delRow('loan', ${idx})">✕</button></div>`;
+        });
+
+        const eventContainer = document.getElementById('list-event'); eventContainer.innerHTML = '';
+        store.event.forEach((item, idx) => {
+            eventContainer.innerHTML += `<div class="row col-event">
+                <input type="text" value="${item.n}" onchange="update('event', ${idx}, 'n', this.value)">
+                <select onchange="update('event', ${idx}, 'm', this.value)">${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => `<option value="${m}" ${item.m == m ? 'selected' : ''}>${m}월</option>`).join('')}</select>
+                <input type="number" value="${item.v}" oninput="update('event', ${idx}, 'v', this.value)">
+                <button class="btn-del" onclick="delRow('event', ${idx})">✕</button></div>`;
+        });
+
+        const investContainer = document.getElementById('list-invest'); investContainer.innerHTML = '';
+        store.invest.forEach((item, idx) => {
+            investContainer.innerHTML += `<div class="row col-invest">
+                <input type="text" value="${item.n}" onchange="update('invest', ${idx}, 'n', this.value)">
+                <input type="number" value="${item.v}" oninput="update('invest', ${idx}, 'v', this.value)">
+                <div class="input-suffix-group"><input type="number" value="${item.r}" step="0.1" oninput="update('invest', ${idx}, 'r', this.value)"><span>%</span></div>
+                <button class="btn-del" onclick="delRow('invest', ${idx})">✕</button></div>`;
+        });
+
+        calc(); saveData();
+    }
+
+    function addRow(type) {
+        const obj = {n: '새 항목', v: 0};
+        if(type === 'event') obj.m = 1; if(type === 'invest') obj.r = 0; if(type === 'loan') { obj.r = 5; obj.p = 0; }
+        store[type].push(obj); render();
+    }
+    function delRow(type, idx) { store[type].splice(idx, 1); render(); }
+    function update(type, idx, key, val) { store[type][idx][key] = key === 'n' ? val : parseFloat(val) || 0; calc(); saveData(); }
+    function saveData() { localStorage.setItem('financeProDataMasterXLSX2', JSON.stringify(store)); }
+
+    function calc() {
+        const startStr = document.getElementById('startDate').value, endStr = document.getElementById('targetDate').value;
+        const targetName = document.getElementById('targetName').value, targetAmt = parseFloat(document.getElementById('targetAmount').value) || 1;
+        
+        localStorage.setItem('planStartDate', startStr); localStorage.setItem('planTargetDate', endStr);
+        localStorage.setItem('planTargetName', targetName); localStorage.setItem('planTargetAmount', targetAmt);
+        
+        const start = new Date(startStr), end = new Date(endStr);
+        let totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+        if (end.getDate() < start.getDate()) totalMonths--; if (totalMonths < 0) totalMonths = 0;
+
+        document.getElementById('diff-months').innerText = totalMonths;
+        document.querySelectorAll('.duration-text').forEach(el => el.innerText = `${totalMonths}개월`);
+
+        const monthlyInc = store.income.reduce((s, i) => s + i.v, 0), monthlyExp = store.expense.reduce((s, i) => s + i.v, 0);
+        
+        let initialLoanTotal = 0, monthlyLoanInterest = 0, monthlyLoanRepayment = 0, finalRemainingLoan = 0;
+        store.loan.forEach(item => {
+            initialLoanTotal += item.v; 
+            monthlyLoanInterest += (item.v * (item.r / 100)) / 12; 
+            monthlyLoanRepayment += item.p; 
+            let remained = item.v - (item.p * totalMonths); 
+            finalRemainingLoan += (remained < 0 ? 0 : remained);
+        });
+
+        const monthlyLoanTotal = monthlyLoanInterest + monthlyLoanRepayment;
+        const monthlyPureSave = monthlyInc - monthlyExp - monthlyLoanTotal;
+
+        let eventTotal = 0;
+        if (totalMonths > 0) {
+            let tempDate = new Date(start.getFullYear(), start.getMonth(), 1); 
+            const endLimit = new Date(end.getFullYear(), end.getMonth(), 1);
+            while(tempDate <= endLimit) {
+                const currentMonth = tempDate.getMonth() + 1;
+                store.event.forEach(item => { if(item.m == currentMonth) eventTotal += item.v; });
+                tempDate.setMonth(tempDate.getMonth() + 1);
+            }
+        }
+
+        const periodCashTotal = (monthlyPureSave * totalMonths) - eventTotal;
+        let totalInvestPrincipal = 0, expectedProfit = 0;
+        store.invest.forEach(item => {
+            totalInvestPrincipal += item.v;
+            expectedProfit += (item.v * Math.pow(1 + item.r / 100, totalMonths) - item.v);
+        });
+
+        document.getElementById('top-inc').innerText = monthlyInc.toLocaleString() + '만';
+        document.getElementById('top-exp').innerText = monthlyExp.toLocaleString() + '만';
+        document.getElementById('top-loan-total').innerText = Math.round(monthlyLoanTotal).toLocaleString() + '만';
+        document.getElementById('top-save').innerText = Math.round(monthlyPureSave).toLocaleString() + '만';
+        document.getElementById('top-invest').innerText = totalInvestPrincipal.toLocaleString() + '만';
+
+        document.getElementById('final-cash').innerText = Math.round(periodCashTotal).toLocaleString() + ' 만원';
+        document.getElementById('final-profit').innerText = '+' + Math.round(expectedProfit + totalInvestPrincipal).toLocaleString() + ' 만원';
+        document.getElementById('final-loan').innerText = Math.round(finalRemainingLoan).toLocaleString() + ' 만원';
+        
+        const netWorth = periodCashTotal + totalInvestPrincipal + expectedProfit - finalRemainingLoan;
+        document.getElementById('final-grand').innerText = Math.round(netWorth).toLocaleString() + ' 만원';
+
+        let percent = Math.max(0, Math.min(100, (netWorth / targetAmt) * 100));
+        document.getElementById('progressBar').style.width = percent + '%';
+        document.getElementById('progressPercent').innerText = percent.toFixed(1);
+
+        document.getElementById('explain-cash').innerHTML = `(월 잉여금 <b>${Math.round(monthlyPureSave)}만</b> × ${totalMonths}개월) <br>- 이벤트 총 <b>${eventTotal}만</b> 차감`;
+        document.getElementById('explain-profit').innerHTML = `현재 <b>${totalInvestPrincipal}만</b>의 복리 수익 결과`;
+        document.getElementById('explain-loan').innerHTML = `원금 <b>${initialLoanTotal}만</b> <br>- (상환 <b>${monthlyLoanRepayment}만</b> × ${totalMonths}개월)`;
+        document.getElementById('explain-grand').innerHTML = `(모인현금 + 투자최종금액) - 남은 빚`;
+    }
+
+    function renderCalendar() {
+        const year = currentCalDate.getFullYear(), month = currentCalDate.getMonth(), today = new Date();
+        document.getElementById('cal-month-title').innerText = `${year}년 ${month + 1}월`;
+        const firstDay = new Date(year, month, 1).getDay(), daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        const calGrid = document.getElementById('cal-days');
+        const headers = calGrid.innerHTML.split('</div>').slice(0, 7).map(h => h + '</div>').join('');
+        calGrid.innerHTML = headers;
+
+        for(let i=0; i<firstDay; i++) calGrid.innerHTML += `<div class="cal-cell cal-other-month"></div>`;
+
+        for(let day=1; day<=daysInMonth; day++) {
+            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const isToday = (year === today.getFullYear() && month === today.getMonth() && day === today.getDate());
+            
+            let dayInc = 0, dayExp = 0;
+            if(store.ledger[dateStr]) {
+                store.ledger[dateStr].forEach(item => { item.type === 'inc' ? dayInc += item.amt : dayExp += item.amt; });
+            }
+
+            let amtHtml = '';
+            if(dayInc > 0) amtHtml += `<div class="cal-amt c-inc">+${dayInc.toLocaleString()}</div>`;
+            if(dayExp > 0) amtHtml += `<div class="cal-amt c-exp">-${dayExp.toLocaleString()}</div>`;
+            
+            if(dayInc > 0 || dayExp > 0) {
+                let net = dayInc - dayExp;
+                let netClass = net >= 0 ? 'c-inc' : 'c-exp';
+                amtHtml += `<div class="cal-net ${netClass}">합계 ${net > 0 ? '+' : ''}${net.toLocaleString()}</div>`;
+            }
+
+            calGrid.innerHTML += `<div class="cal-cell ${isToday ? 'cal-today' : ''}" onclick="openModal('${dateStr}')"><div class="cal-date">${day}</div>${amtHtml}</div>`;
+        }
+    }
+
+    function changeMonth(offset) { currentCalDate.setMonth(currentCalDate.getMonth() + offset); renderCalendar(); }
+
+    function updateCategoryOptions() {
+        const type = document.getElementById('l-type').value;
+        const catSelect = document.getElementById('l-category');
+        catSelect.innerHTML = '';
+        if(type === 'exp') {
+            catSelect.innerHTML = `
+                <option value="식비/카페">식비/카페</option>
+                <option value="교통/차량">교통/차량</option>
+                <option value="인건비">인건비</option>
+                <option value="도시가스/공과금">도시가스/공과금</option>
+                <option value="하찮은일기장 운영비">하찮은일기장 운영비</option>
+                <option value="오프라인 행사비">오프라인 행사비</option>
+                <option value="기타">기타</option>`;
+        } else {
+            catSelect.innerHTML = `
+                <option value="급여/보너스">급여/보너스</option>
+                <option value="부수입(일기장 등)">부수입(일기장 등)</option>
+                <option value="투자수익">투자수익</option>
+                <option value="기타">기타</option>`;
+        }
+    }
+
+    function openModal(dateStr) {
+        selectedDateStr = dateStr;
+        document.getElementById('modal-date-title').innerText = `${dateStr} 기록`;
+        document.getElementById('l-amt').value = ''; document.getElementById('l-memo').value = '';
+        updateCategoryOptions();
+        renderModalList();
+        document.getElementById('ledgerModal').style.display = 'flex';
+    }
+    
+    function closeModal() { 
+        document.getElementById('ledgerModal').style.display = 'none'; 
+        renderCalendar(); 
+        renderTrend(); 
+        renderLaborAnalysis(); 
+    }
+
+    function renderModalList() {
+        const listContainer = document.getElementById('modal-ledger-list');
+        const summaryBox = document.getElementById('modal-summary-box');
+        listContainer.innerHTML = '';
+        
+        let dayInc = 0, dayExp = 0;
+        
+        if(store.ledger[selectedDateStr]) {
+            store.ledger[selectedDateStr].forEach((item, idx) => {
+                const isInc = item.type === 'inc';
+                isInc ? dayInc += item.amt : dayExp += item.amt;
+                listContainer.innerHTML += `
+                    <div class="ledger-item type-${item.type}">
+                        <div class="ledger-item-info">
+                            <div style="font-weight:bold; color:var(--${isInc?'primary':'expense'})">${isInc?'+':'-'}${item.amt.toLocaleString()}원</div>
+                            <div style="display:flex; align-items:center; gap:5px; margin-top:3px;">
+                                <span class="tag-badge">${item.category || '기타'}</span>
+                                <span class="ledger-item-memo">${item.memo || '-'}</span>
+                            </div>
+                        </div>
+                        <button class="btn-del" style="width:auto; padding:5px 10px;" onclick="deleteLedger(${idx})">삭제</button>
+                    </div>`;
+            });
+        } else {
+            listContainer.innerHTML = '<div style="text-align:center; color:#64748b; padding:20px; font-size:13px;">입력된 내역이 없습니다.</div>';
+        }
+
+        let net = dayInc - dayExp;
+        let netClass = net >= 0 ? 'c-inc' : 'c-exp';
+        summaryBox.innerHTML = `
+            <div class="flex-row">
+                <span class="c-inc">수입: +${dayInc.toLocaleString()}원</span>
+                <span class="c-exp">지출: -${dayExp.toLocaleString()}원</span>
+            </div>
+            <div class="total-net ${netClass}">오늘의 결산: ${net > 0 ? '+' : ''}${net.toLocaleString()}원</div>
+        `;
+    }
+
+    function addLedger() {
+        const type = document.getElementById('l-type').value, 
+              amt = parseInt(document.getElementById('l-amt').value) || 0, 
+              category = document.getElementById('l-category').value,
+              memo = document.getElementById('l-memo').value;
+              
+        if(amt <= 0) { alert('금액을 입력해주세요.'); return; }
+        if(!store.ledger[selectedDateStr]) store.ledger[selectedDateStr] = [];
+        store.ledger[selectedDateStr].push({ type, amt, category, memo });
+        saveData(); renderModalList();
+        document.getElementById('l-amt').value = ''; document.getElementById('l-memo').value = '';
+    }
+
+    function deleteLedger(idx) {
+        store.ledger[selectedDateStr].splice(idx, 1);
+        if(store.ledger[selectedDateStr].length === 0) delete store.ledger[selectedDateStr];
+        saveData(); renderModalList();
+    }
+
+    function renderTrend() {
+        const trendContainer = document.getElementById('ledger-trend-list');
+        trendContainer.innerHTML = '';
+        
+        let monthlyData = {};
+        let maxAmt = 0;
+
+        for (let dateStr in store.ledger) {
+            let monthStr = dateStr.substring(0, 7); 
+            if (!monthlyData[monthStr]) monthlyData[monthStr] = { inc: 0, exp: 0 };
+            
+            store.ledger[dateStr].forEach(item => {
+                if (item.type === 'inc') monthlyData[monthStr].inc += item.amt;
+                else monthlyData[monthStr].exp += item.amt;
+            });
+
+            if (monthlyData[monthStr].inc > maxAmt) maxAmt = monthlyData[monthStr].inc;
+            if (monthlyData[monthStr].exp > maxAmt) maxAmt = monthlyData[monthStr].exp;
+        }
+
+        const sortedMonths = Object.keys(monthlyData).sort((a, b) => b.localeCompare(a)); 
+
+        if(sortedMonths.length === 0) {
+            trendContainer.innerHTML = '<div style="text-align:center; color:#64748b; padding:30px 10px; font-size:14px;">아직 가계부에 기록된 내역이 없습니다. 달력에 수입/지출을 추가해보세요!</div>';
+            return;
+        }
+
+        sortedMonths.forEach(month => {
+            const data = monthlyData[month];
+            const net = data.inc - data.exp;
+            
+            const incWidth = maxAmt === 0 ? 0 : (data.inc / maxAmt) * 100;
+            const expWidth = maxAmt === 0 ? 0 : (data.exp / maxAmt) * 100;
+            
+            const netClass = net >= 0 ? 'c-inc' : 'c-exp';
+            const sign = net > 0 ? '+' : '';
+            const displayMonth = month.replace('-', '년 ') + '월';
+
+            trendContainer.innerHTML += `
+                <div class="trend-item">
+                    <div class="trend-month">${displayMonth}</div>
+                    <div class="trend-bars">
+                        <div class="trend-bar-row">
+                            <span class="trend-label">수입</span>
+                            <div class="trend-bar-track"><div class="trend-bar fill-inc" style="width: ${incWidth}%"></div></div>
+                            <span class="trend-val">${data.inc.toLocaleString()}원</span>
+                        </div>
+                        <div class="trend-bar-row">
+                            <span class="trend-label">지출</span>
+                            <div class="trend-bar-track"><div class="trend-bar fill-exp" style="width: ${expWidth}%"></div></div>
+                            <span class="trend-val">${data.exp.toLocaleString()}원</span>
+                        </div>
+                    </div>
+                    <div class="trend-net-box">
+                        <div class="label">월 순수익</div>
+                        <div class="val ${netClass}">${sign}${net.toLocaleString()}원</div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // 🔥 인건비 자동 분석 로직
+    function renderLaborAnalysis() {
+        let totalInc = 0;
+        let totalLabor = 0;
+        
+        for (let dateStr in store.ledger) {
+            store.ledger[dateStr].forEach(item => {
+                if (item.type === 'inc') {
+                    totalInc += item.amt;
+                } else if (item.type === 'exp' && item.category === '인건비') {
+                    totalLabor += item.amt;
+                }
+            });
+        }
+        
+        const container = document.getElementById('labor-analysis-result');
+        
+        if (totalInc === 0) {
+            container.innerHTML = '<span style="color:#64748b;">아직 수입 데이터가 없어 분석할 수 없습니다. 엑셀을 연동해주세요.</span>';
+            return;
+        }
+        
+        const ratio = ((totalLabor / totalInc) * 100).toFixed(1);
+        let status = '';
+        let color = '';
+        
+        if (ratio < 20) { 
+            status = '매우 우수 🟢 (수익성이 아주 좋습니다!)'; 
+            color = 'var(--primary)'; 
+        } else if (ratio <= 35) { 
+            status = '적정 수준 🟡 (이상적인 비율입니다)'; 
+            color = 'var(--invest)'; 
+        } else if (ratio <= 50) { 
+            status = '주의 요망 🟠 (인건비가 다소 높습니다)'; 
+            color = 'var(--loan)'; 
+        } else { 
+            status = '위험 수준 🔴 (비용 절감 및 업무 자동화가 시급합니다!)'; 
+            color = 'var(--expense)'; 
+        }
+        
+        container.innerHTML = `
+            <div style="font-size: 15px; color: #cbd5e1; margin-bottom: 12px;">
+                가계부 총 수입: <b>${totalInc.toLocaleString()}원</b> &nbsp;|&nbsp; 총 인건비 지출: <b>${totalLabor.toLocaleString()}원</b>
+            </div>
+            <div style="font-size: 24px; font-weight: bold; color: ${color};">
+                현재 인건비 비중: ${ratio}% <br><span style="font-size:16px; font-weight:normal; margin-top:8px; display:block;">${status}</span>
+            </div>
+        `;
+    }
+
+    function openDeleteModal() {
+        const todayStr = new Date().toISOString().split('T')[0];
+        document.getElementById('delStartDate').value = todayStr;
+        document.getElementById('delEndDate').value = todayStr;
+        document.getElementById('deleteModal').style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').style.display = 'none';
+    }
+
+    function executeDelete() {
+        const startStr = document.getElementById('delStartDate').value;
+        const endStr = document.getElementById('delEndDate').value;
+        
+        if(!startStr || !endStr) { alert('날짜를 정확히 지정해주세요.'); return; }
+        if(startStr > endStr) { alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
+
+        const start = new Date(startStr);
+        const end = new Date(endStr);
+        let delCount = 0;
+
+        for(let date in store.ledger) {
+            const targetDate = new Date(date);
+            if(targetDate >= start && targetDate <= end) {
+                delete store.ledger[date];
+                delCount++;
+            }
+        }
+
+        if(delCount > 0) {
+            saveData(); 
+            renderCalendar(); 
+            renderTrend();
+            renderLaborAnalysis(); 
+            alert(delCount + '일치 가계부 내역이 삭제되었습니다.');
+        } else {
+            alert('지정한 기간 내에 삭제할 가계부 내역이 없습니다.');
+        }
+        closeDeleteModal();
+    }
+
+    function importExcel(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            try {
+                const data = new Uint8Array(ev.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                const rows = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+
+                let isDataRow = false;
+                let addCount = 0;
+                let seenNames = new Set(); 
+
+                let dateIdx = -1, typeIdx = -1, amtIdx = -1, nameIdx = -1;
+
+                // 🔥 인건비로 자동 분류할 타겟 이름 목록
+                const targetLaborNames = ['유상욱', '유승엽', '황록영', '이종현'];
+
+                rows.forEach(parsed => {
+                    if(!parsed || parsed.length === 0) return;
+                    
+                    if(!isDataRow) {
+                        const rowStr = parsed.join('');
+                        if(rowStr.includes('거래일시') && rowStr.includes('거래금액')) {
+                            isDataRow = true;
+                            dateIdx = parsed.findIndex(col => String(col).includes('거래일시'));
+                            typeIdx = parsed.findIndex(col => String(col).includes('구분'));
+                            amtIdx = parsed.findIndex(col => String(col).includes('거래금액'));
+                            nameIdx = parsed.findIndex(col => String(col).includes('내용'));
+                            return;
+                        }
+                    }
+                    
+                    if(isDataRow && dateIdx !== -1) {
+                        const dateRaw = String(parsed[dateIdx] || '').trim(); 
+                        if(!dateRaw || dateRaw === 'undefined') return;
+                        
+                        const dateStr = dateRaw.split(' ')[0].replace(/\./g, '-'); 
+                        const typeStr = String(parsed[typeIdx] || '').trim(); 
+                        
+                        const amtRaw = String(parsed[amtIdx] || '').trim(); 
+                        // 🔥 마이너스 기호를 떼고 절대값으로 읽어오도록 수정 완료!
+                        const amt = Math.abs(parseInt(amtRaw.replace(/,/g, ''))) || 0; 
+                        
+                        const name = String(parsed[nameIdx] || '').trim();
+
+                        if(dateStr && amt > 0) {
+                            let type, category, memo;
+
+                            if(typeStr.includes('입금')) {
+                                type = 'inc';
+                                category = '부수입(일기장 등)';
+                                const isDupName = seenNames.has(name);
+                                seenNames.add(name);
+                                memo = name + (isDupName ? ' (중복)' : ' (엑셀)');
+                            } 
+                            else if(typeStr.includes('출금')) {
+                                type = 'exp';
+                                
+                                // 🔥 출금 대상이 지정된 4명 중 한 명이면 무조건 '인건비'로 분류
+                                if (targetLaborNames.some(n => name.includes(n))) {
+                                    category = '인건비';
+                                    memo = name + ' (인건비/엑셀)';
+                                } else {
+                                    category = '기타';
+                                    memo = name + ' (엑셀)';
+                                }
+                            } 
+                            else {
+                                return; 
+                            }
+                            
+                            if(!store.ledger[dateStr]) store.ledger[dateStr] = [];
+                            
+                            const isSystemDup = store.ledger[dateStr].some(item => item.amt === amt && item.memo === memo && item.type === type);
+                            
+                            if(!isSystemDup) {
+                                store.ledger[dateStr].push({ type, amt, category, memo: memo });
+                                addCount++;
+                            }
+                        }
+                    }
+                });
+
+                if(addCount > 0) {
+                    saveData(); 
+                    renderCalendar(); 
+                    renderTrend();
+                    renderLaborAnalysis(); 
+                    alert(addCount + '건의 내역(입출금)이 달력에 정상적으로 연동되었습니다! 인건비 분석 결과를 확인해보세요.');
+                } else {
+                    alert('새로 추가할 내역이 없거나, 양식이 맞지 않습니다. (이미 등록된 내역일 수 있습니다.)');
+                }
+            } catch(error) {
+                console.error(error);
+                alert('엑셀 파일을 읽는 중 오류가 발생했습니다. 파일 형식을 확인해주세요.');
+            } finally {
+                e.target.value = ''; 
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function exportData() {
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(store)], {type: 'application/json'}));
+        a.download = `형의_최종자산플랜_${new Date().toISOString().slice(0,10)}.json`; a.click();
+    }
+    function importData(e) {
+        const reader = new FileReader();
+        reader.onload = (ev) => { 
+            store = JSON.parse(ev.target.result); 
+            if(!store.ledger) store.ledger = {}; 
+            render(); 
+            renderCalendar(); 
+            renderTrend();
+            renderLaborAnalysis(); 
+        };
+        reader.readAsText(e.target.files[0]);
+    }
+    init();
+</script>
+</body>
+</html>
