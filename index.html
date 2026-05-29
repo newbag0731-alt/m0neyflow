@@ -247,10 +247,11 @@
     </div>
 
     <div class="trend-container" style="background: linear-gradient(135deg, rgba(244, 63, 94, 0.1), rgba(15, 23, 42, 1)); border-color: var(--expense);">
-        <h2>🧑‍💻 실 가계부 기반 인건비 진단</h2>
+        <h2>🧑‍💻 실 가계부 기반 인건비 진단 & 월별 추이</h2>
         <div id="labor-analysis-result" style="text-align: center; padding: 20px 0;">
             <span style="color:#64748b;">엑셀 데이터를 연동하면 인건비 비중을 자동 분석해 드립니다.</span>
         </div>
+        <div id="labor-trend-graph" style="margin-top: 20px; border-top: 1px dashed #334155; padding-top: 20px;"></div>
     </div>
 
     <div class="trend-container">
@@ -287,6 +288,7 @@
                     <option value="식비/카페">식비/카페</option>
                     <option value="교통/차량">교통/차량</option>
                     <option value="인건비">인건비</option>
+                    <option value="도시가스/공과금">도시가스/공과금</option>
                     <option value="하찮은일기장 운영비">하찮은일기장 운영비</option>
                     <option value="오프라인 행사비">오프라인 행사비</option>
                     <option value="기타">기타</option>
@@ -670,43 +672,53 @@
         });
     }
 
+    // 🔥 인건비 자동 분석 및 월별 그래프 렌더링 로직 추가
     function renderLaborAnalysis() {
         let totalInc = 0;
         let totalLabor = 0;
+        let monthlyLaborData = {}; 
+        let maxLaborAmt = 0;
         
+        // 데이터 집계
         for (let dateStr in store.ledger) {
+            let monthStr = dateStr.substring(0, 7);
+            if (!monthlyLaborData[monthStr]) monthlyLaborData[monthStr] = 0;
+
             store.ledger[dateStr].forEach(item => {
                 if (item.type === 'inc') {
                     totalInc += item.amt;
                 } else if (item.type === 'exp' && item.category === '인건비') {
                     totalLabor += item.amt;
+                    monthlyLaborData[monthStr] += item.amt;
                 }
             });
         }
         
         const container = document.getElementById('labor-analysis-result');
+        const graphContainer = document.getElementById('labor-trend-graph');
         
-        if (totalInc === 0) {
-            container.innerHTML = '<span style="color:#64748b;">아직 수입 데이터가 없어 분석할 수 없습니다. 엑셀을 연동해주세요.</span>';
+        // 데이터가 아예 없을 경우
+        if (totalInc === 0 && totalLabor === 0) {
+            container.innerHTML = '<span style="color:#64748b;">아직 수입/인건비 데이터가 없어 분석할 수 없습니다. 엑셀을 연동해주세요.</span>';
+            graphContainer.innerHTML = '';
             return;
         }
         
-        const ratio = ((totalLabor / totalInc) * 100).toFixed(1);
+        // 비율 계산
+        const ratio = totalInc === 0 ? 0 : ((totalLabor / totalInc) * 100).toFixed(1);
         let status = '';
         let color = '';
         
-        if (ratio < 20) { 
-            status = '매우 우수 🟢 (수익성이 아주 좋습니다!)'; 
-            color = 'var(--primary)'; 
+        if (ratio === 0) {
+            status = '인건비 지출 없음 🟢'; color = 'var(--text)';
+        } else if (ratio < 20) { 
+            status = '매우 우수 🟢 (수익성이 아주 좋습니다!)'; color = 'var(--primary)'; 
         } else if (ratio <= 35) { 
-            status = '적정 수준 🟡 (이상적인 비율입니다)'; 
-            color = 'var(--invest)'; 
+            status = '적정 수준 🟡 (이상적인 비율입니다)'; color = 'var(--invest)'; 
         } else if (ratio <= 50) { 
-            status = '주의 요망 🟠 (인건비가 다소 높습니다)'; 
-            color = 'var(--loan)'; 
+            status = '주의 요망 🟠 (인건비가 다소 높습니다)'; color = 'var(--loan)'; 
         } else { 
-            status = '위험 수준 🔴 (비용 절감 및 업무 자동화가 시급합니다!)'; 
-            color = 'var(--expense)'; 
+            status = '위험 수준 🔴 (비용 절감 및 업무 자동화가 시급합니다!)'; color = 'var(--expense)'; 
         }
         
         container.innerHTML = `
@@ -717,6 +729,38 @@
                 현재 인건비 비중: ${ratio}% <br><span style="font-size:16px; font-weight:normal; margin-top:8px; display:block;">${status}</span>
             </div>
         `;
+
+        // 🔥 월별 인건비 미니 그래프 생성
+        const sortedMonths = Object.keys(monthlyLaborData).sort((a, b) => b.localeCompare(a));
+        sortedMonths.forEach(m => {
+            if(monthlyLaborData[m] > maxLaborAmt) maxLaborAmt = monthlyLaborData[m];
+        });
+
+        if (maxLaborAmt === 0) {
+            graphContainer.innerHTML = '<div style="text-align:center; color:#64748b; font-size:13px;">등록된 인건비 지출 내역이 없습니다.</div>';
+            return;
+        }
+
+        let graphHtml = '<h3 style="font-size:14px; color:#cbd5e1; margin-bottom:15px;">📉 월별 인건비 지출 추이</h3>';
+        
+        sortedMonths.forEach(month => {
+            const amt = monthlyLaborData[month];
+            if (amt === 0) return; // 0원인 달은 패스
+            const width = (amt / maxLaborAmt) * 100;
+            const displayMonth = month.replace('-', '년 ') + '월';
+
+            graphHtml += `
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                    <div style="width: 85px; font-size: 13px; color: #94a3b8; font-weight: bold; text-align: left;">${displayMonth}</div>
+                    <div style="flex: 1; background: #0f172a; height: 12px; border-radius: 6px; overflow: hidden;">
+                        <div style="width: ${width}%; background: var(--expense); height: 100%; border-radius: 6px; transition: width 0.5s ease;"></div>
+                    </div>
+                    <div style="width: 90px; text-align: right; font-size: 13px; color: #f8fafc; font-weight: bold;">${amt.toLocaleString()}원</div>
+                </div>
+            `;
+        });
+
+        graphContainer.innerHTML = graphHtml;
     }
 
     function openDeleteModal() {
@@ -765,9 +809,9 @@
         const file = e.target.files[0];
         if (!file) return;
 
-        // 🔥 이어진 제외 총액을 추적하기 위한 변수 추가
         let excludedIncAmt = 0;
         let excludedExpAmt = 0;
+        let excludedCheckCardAmt = 0; // 🔥 체크카드 제외 금액 추적용
 
         const reader = new FileReader();
         reader.onload = function(ev) {
@@ -785,7 +829,8 @@
 
                 let dateIdx = -1, typeIdx = -1, amtIdx = -1, nameIdx = -1;
 
-                const targetLaborNames = ['유상욱', '유승엽', '황록영', '이종현'];
+                // 🔥 업데이트된 인건비 타겟 직원 명단 
+                const targetLaborNames = ['유승엽', '유승아', '유상욱'];
 
                 rows.forEach(parsed => {
                     if(!parsed || parsed.length === 0) return;
@@ -815,14 +860,15 @@
                         const name = String(parsed[nameIdx] || '').trim();
 
                         if(dateStr && amt > 0) {
-                            // 🔥 이름에 '이어진'이 포함된 경우 통계 제외 및 금액 누적 후 바로 스킵
-                            if (name.includes('이어진')) {
+                            // 🔥 '이어진' 또는 '체크카드'가 포함된 경우 통계 제외 및 금액 누적 후 바로 스킵
+                            if (name.includes('이어진') || name.includes('체크카드')) {
                                 if (typeStr.includes('입금')) {
-                                    excludedIncAmt += amt;
+                                    if(name.includes('이어진')) excludedIncAmt += amt;
                                 } else if (typeStr.includes('출금')) {
-                                    excludedExpAmt += amt;
+                                    if(name.includes('이어진')) excludedExpAmt += amt;
+                                    if(name.includes('체크카드')) excludedCheckCardAmt += amt;
                                 }
-                                return; // 가계부 등록 프로세스 건너뛰기
+                                return; 
                             }
 
                             let type, category, memo;
@@ -861,7 +907,6 @@
                     }
                 });
 
-                // 🔥 알림창 텍스트 조립 (제외된 금액 정보 추가)
                 if(addCount > 0) {
                     saveData(); 
                     renderCalendar(); 
@@ -869,13 +914,15 @@
                     renderLaborAnalysis(); 
                     
                     let msg = addCount + '건의 내역(입출금)이 달력에 정상적으로 연동되었습니다!';
-                    if(excludedIncAmt > 0 || excludedExpAmt > 0) {
-                        msg += `\n\n💡 참고: '이어진' 님의 내역은 통계 왜곡 방지를 위해 제외되었습니다.\n- 제외된 입금총액: ${excludedIncAmt.toLocaleString()}원\n- 제외된 출금총액: ${excludedExpAmt.toLocaleString()}원`;
+                    if(excludedIncAmt > 0 || excludedExpAmt > 0 || excludedCheckCardAmt > 0) {
+                        msg += `\n\n💡 자동 필터링 알림:\n`;
+                        if(excludedIncAmt > 0) msg += `- 제외된 '이어진' 입금: ${excludedIncAmt.toLocaleString()}원\n`;
+                        if(excludedExpAmt > 0) msg += `- 제외된 '이어진' 출금: ${excludedExpAmt.toLocaleString()}원\n`;
+                        if(excludedCheckCardAmt > 0) msg += `- 제외된 '체크카드' 출금: ${excludedCheckCardAmt.toLocaleString()}원`;
                     }
                     alert(msg);
-                } else if (excludedIncAmt > 0 || excludedExpAmt > 0) {
-                    // 추가된 건 없지만 본인 거래만 있어서 제외된 경우
-                    alert(`새로 등록된 내역은 없습니다.\n(💡 '이어진' 님의 거래만 감지되어 모두 제외되었습니다: 입금 ${excludedIncAmt.toLocaleString()}원 / 출금 ${excludedExpAmt.toLocaleString()}원)`);
+                } else if (excludedIncAmt > 0 || excludedExpAmt > 0 || excludedCheckCardAmt > 0) {
+                    alert(`새로 등록된 내역은 없습니다.\n(💡 감지된 거래가 모두 필터링 대상이었습니다: 이어진 입/출금, 체크카드 등)`);
                 } else {
                     alert('새로 추가할 내역이 없거나, 양식이 맞지 않습니다. (이미 등록된 내역일 수 있습니다.)');
                 }
