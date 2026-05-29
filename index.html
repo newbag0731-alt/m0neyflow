@@ -199,6 +199,7 @@
             <div id="list-invest"></div>
         </div>
 
+        <!-- 최종 결과창 -->
         <div class="total-year">
             <div class="total-box">
                 <h4><span class="duration-text">0개월</span> 뒤 모인 현금</h4>
@@ -226,6 +227,7 @@
         </div>
     </div>
 
+    <!-- 가계부 캘린더 -->
     <div class="card" style="margin-top: 10px;">
         <div class="calendar-header">
             <h2 id="cal-month-title">2026년 가계부</h2>
@@ -246,6 +248,7 @@
         </div>
     </div>
 
+    <!-- 🔥 인건비 분석 & 월별 파스텔톤 그래프 패널 -->
     <div class="trend-container" style="background: linear-gradient(135deg, rgba(244, 63, 94, 0.1), rgba(15, 23, 42, 1)); border-color: var(--expense);">
         <h2>🧑‍💻 실 가계부 기반 인건비 진단 & 월별 추이</h2>
         <div id="labor-analysis-result" style="text-align: center; padding: 20px 0;">
@@ -254,12 +257,14 @@
         <div id="labor-trend-graph" style="margin-top: 20px; border-top: 1px dashed #334155; padding-top: 20px;"></div>
     </div>
 
+    <!-- 실질 현금흐름 추이 -->
     <div class="trend-container">
         <h2>📊 월별 실질 현금흐름 요약 (가계부 기준)</h2>
         <div id="ledger-trend-list"></div>
     </div>
 </div>
 
+<!-- 단일 기록 모달창 -->
 <div class="modal-overlay" id="ledgerModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -301,6 +306,7 @@
     </div>
 </div>
 
+<!-- 기간 삭제 모달창 -->
 <div class="modal-overlay" id="deleteModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -672,7 +678,7 @@
         });
     }
 
-    // 🔥 파스텔 톤 & 인원별 누적 인건비 분석 로직
+    // 🔥 파스텔 톤 & 인원별 누적 인건비 분석 로직 (큰 금액부터 정렬 적용)
     function renderLaborAnalysis() {
         let totalInc = 0;
         let totalLabor = 0;
@@ -757,7 +763,6 @@
             return;
         }
 
-        // 범례 및 그래프 헤더 렌더링
         let graphHtml = `
             <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
                 <h3 style="font-size:14px; color:#cbd5e1; margin:0;">📉 월별 인건비 지출 추이 (팀원별)</h3>
@@ -777,11 +782,22 @@
             const totalWidth = (totalAmt / maxLaborAmt) * 100;
             const displayMonth = month.replace('-', '년 ') + '월';
 
+            // 🔥 금액이 큰 순서대로 막대기 안의 색상을 정렬하는 로직 추가
+            let laborEntries = [
+                { name: '유승엽', amt: data['유승엽'] || 0 },
+                { name: '유승아', amt: data['유승아'] || 0 },
+                { name: '유상욱', amt: data['유상욱'] || 0 },
+                { name: '기타', amt: data['기타'] || 0 }
+            ];
+            
+            // 금액 내림차순(가장 큰 금액이 맨 앞)으로 정렬
+            laborEntries.sort((a, b) => b.amt - a.amt);
+
             let segmentsHtml = '';
-            ['유승엽', '유승아', '유상욱', '기타'].forEach(key => {
-                if (data[key] > 0) {
-                    const segmentWidth = (data[key] / totalAmt) * 100;
-                    segmentsHtml += `<div title="${key}: ${data[key].toLocaleString()}원" style="width: ${segmentWidth}%; background: ${colors[key]}; height: 100%; transition: width 0.5s ease; cursor:pointer; border-right:1px solid #1e293b; box-sizing:border-box;"></div>`;
+            laborEntries.forEach(entry => {
+                if (entry.amt > 0) {
+                    const segmentWidth = (entry.amt / totalAmt) * 100;
+                    segmentsHtml += `<div title="${entry.name}: ${entry.amt.toLocaleString()}원" style="width: ${segmentWidth}%; background: ${colors[entry.name]}; height: 100%; transition: width 0.5s ease; cursor:pointer; border-right:1px solid #1e293b; box-sizing:border-box;"></div>`;
                 }
             });
 
